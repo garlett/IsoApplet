@@ -120,16 +120,10 @@ https://github.com/OpenSC/OpenSC/blob/master/src/pkcs15init/pkcs15-cflex.c#L938
 
 
 :isoapplet
-rem https://github.com/philipWendland/IsoApplet/blob/main/src/xyz/wendland/javacard/pki/isoapplet/IsoApplet.java#L287
-public void process(APDU apdu)
-	private void processGetData(APDU apdu)
-		... look at private void processPutData(APDU apdu)
-		insert case -> find key export constant
-		if( ! pin.isValidated() ) {  ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);         }
-		if( ! DEF_PRIVATE_KEY_EXPORT_ALLOWED) { ISOException.throwIt(SW_COMMAND_NOT_ALLOWED_GENERAL); } 
-		exportPrivateKey(apdu);
-		private void importRSAkey(byte[] buf, short bOff, short bLen) throws ISOException, NotFoundException, InvalidArgumentsException {
-
+rem https://github.com/garlett/IsoApplet/blob/main/src/xyz/wendland/javacard/pki/isoapplet/IsoApplet.java#L381
+    private void processGetData(APDU apdu) throws ISOException {
+	insert exportPrivateKey(apdu);
+		
 
 
 
