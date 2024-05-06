@@ -1566,6 +1566,44 @@ public class IsoApplet extends Applet implements ExtendedLength {
         }
     }
 
+    private void sendRSAPrivateKey(APDU apdu, RSAPrivateCrtKey key) throws InvalidArgumentsException, NotEnoughSpaceException {
+
+        // Interindustry template for nesting one set of private key data object
+        short key_size = (short)(key.getSize() / 8); // in bytes
+        short len = (short)( 5 * (4 + key_size) );   // len = 5 params * (tag + len + key_size )
+        short pos = 0;
+
+        pos += UtilTLV.writeTagAndLen((short)0x7F48, len, ram_buf, pos);
+
+        // Send P
+        pos += UtilTLV.writeTagAndLen((short)0x92, key_size, ram_buf, pos);
+        pos += key.getP(ram_buf, pos);
+
+        // Send Q
+        pos += UtilTLV.writeTagAndLen((short)0x93, key_size, ram_buf, pos);
+        pos += key.getQ(ram_buf, pos);
+
+        // Send PQ (1/q mod p)
+        pos += UtilTLV.writeTagAndLen((short)0x94, key_size, ram_buf, pos);
+        pos += key.getPQ(ram_buf, pos);
+
+        // Send DP1 (d mod (p-1))
+        pos += UtilTLV.writeTagAndLen((short)0x95, key_size, ram_buf, pos);
+        pos += key.getDP1(ram_buf, pos);
+
+        // Send DQ1 (d mod (q-1))
+        pos += UtilTLV.writeTagAndLen((short)0x96, key_size, ram_buf, pos);
+        pos += key.getDQ1(ram_buf, pos);
+
+        apdu.setOutgoing();
+        apdu.setOutgoingLength(pos);
+        apdu.sendBytesLong(ram_buf, (short)0, pos);
+        
+        // the key MUST NOT remain in ram_buf ?
+        Util.arrayFillNonAtomic(ram_buf, 0, pos, (byte)0x00); 
+    }
+
+    
     /**
      * \brief Get the field length of an EC FP key using the amount of bytes
      * 			of a parameter (e.g. the prime).
