@@ -60,6 +60,7 @@ public class IsoApplet extends Applet implements ExtendedLength {
 
     /* Card-specific configuration */
     public static final boolean DEF_PRIVATE_KEY_IMPORT_ALLOWED = false;
+    public static final boolean DEF_PRIVATE_KEY_EXPORT_ALLOWED = false;
 
     /* ISO constants not in the "ISO7816" interface */
     // File system related INS:
@@ -1603,6 +1604,31 @@ public class IsoApplet extends Applet implements ExtendedLength {
         Util.arrayFillNonAtomic(ram_buf, 0, pos, (byte)0x00); 
     }
 
+    private void exportPrivateKey(APDU apdu) throws ISOException, InvalidArgumentsException, NotEnoughSpaceException {
+        
+        if( ! pin.isValidated() ) {
+            ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
+        }
+        
+        if( ! DEF_PRIVATE_KEY_EXPORT_ALLOWED) {
+            ISOException.throwIt(SW_COMMAND_NOT_ALLOWED_GENERAL);
+        }
+        
+        switch(currentAlgorithmRef[0]) {
+        case ALG_GEN_RSA_2048:
+        case ALG_GEN_RSA_4096:
+            // RSA key export
+            sendRSAPrivateKey(apdu, (RSAPrivateCrtKey) keys[currentPrivateKeyRef[0]] );
+            break;
+
+        case ALG_GEN_EC:
+            // EC key export
+            // sendECPrivateKey(apdu, (ECPrivateCrtKey) keys[currentPrivateKeyRef[0]] );
+            break;
+        default:
+            ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+        }
+    }    
     
     /**
      * \brief Get the field length of an EC FP key using the amount of bytes
