@@ -108,21 +108,18 @@ exit
 
 
 :openSC_pkcs11
-rem pkcs11-tool.exe --read-object --type privkey --id 01 -l --pin XXXXXX
-https://github.com/OpenSC/OpenSC/blob/e2b1fb81e0e1339eebaa36fb90635e03f69d4da3/src/tools/pkcs11-tool.c#L4088
-https://github.com/OpenSC/OpenSC/pull/1393
+pkcs11-tool.exe --read-object --type privkey --id 01 -l --pin 1234
+rem https://github.com/OpenSC/OpenSC/blob/e2b1fb81e0e1339eebaa36fb90635e03f69d4da3/src/tools/pkcs11-tool.c#L4088
+rem https://github.com/OpenSC/OpenSC/pull/1393
 
 :openSC_pkcs15-tool_export-cert
-https://github.com/OpenSC/OpenSC/issues/1522
-https://github.com/OpenSC/OpenSC/blob/master/src/pkcs15init/pkcs15-isoApplet.c#L783
-https://github.com/OpenSC/OpenSC/blob/master/src/pkcs15init/pkcs15-cflex.c#L938
+rem https://github.com/OpenSC/OpenSC/issues/1522
+rem https://github.com/OpenSC/OpenSC/blob/master/src/pkcs15init/pkcs15-isoApplet.c#L783
+rem https://github.com/OpenSC/OpenSC/blob/master/src/pkcs15init/pkcs15-cflex.c#L938
+
+rem config opensc.isoapplet to export key when P1P2 == 0x3FFF
 
 
-
-:isoapplet
-rem https://github.com/garlett/IsoApplet/blob/main/src/xyz/wendland/javacard/pki/isoapplet/IsoApplet.java#L381
-    private void processGetData(APDU apdu) throws ISOException {
-	insert exportPrivateKey(apdu);
 		
 
 
