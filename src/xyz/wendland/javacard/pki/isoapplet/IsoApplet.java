@@ -375,7 +375,7 @@ public class IsoApplet extends Applet implements ExtendedLength {
      *
      * This APDU can be used to request the following data:
      *   P1P2 = 0x0101: Applet version and features
-     *
+     *   P1P2 = 0x3FFF: Private key
      * \param apdu The apdu to process.
      */
     private void processGetData(APDU apdu) throws ISOException {
@@ -394,7 +394,11 @@ public class IsoApplet extends Applet implements ExtendedLength {
             buf[2] = api_features;
             apdu.setOutgoingAndSend((short) 0, (short) 3);
         } else {
-            ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
+            if(p1 == (byte) 0x3F && p2 == (byte) 0xFF) {
+                exportPrivateKey(apdu);
+            } else {
+                ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
+            }
         }
     }
 
