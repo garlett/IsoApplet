@@ -1605,10 +1605,10 @@ public class IsoApplet extends Applet implements ExtendedLength {
         apdu.sendBytesLong(ram_buf, (short)0, pos);
         
         // the key MUST NOT remain in ram_buf ?
-        Util.arrayFillNonAtomic(ram_buf, 0, pos, (byte)0x00); 
+        Util.arrayFillNonAtomic(ram_buf, (short)0, pos, (byte)0x00); 
     }
 
-    private void exportPrivateKey(APDU apdu) throws ISOException, InvalidArgumentsException, NotEnoughSpaceException {
+    private void exportPrivateKey(APDU apdu) throws ISOException {
         
         if( ! pin.isValidated() ) {
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
@@ -1622,7 +1622,13 @@ public class IsoApplet extends Applet implements ExtendedLength {
         case ALG_GEN_RSA_2048:
         case ALG_GEN_RSA_4096:
             // RSA key export
-            sendRSAPrivateKey(apdu, (RSAPrivateCrtKey) keys[currentPrivateKeyRef[0]] );
+            try {
+                sendRSAPrivateKey(apdu, (RSAPrivateCrtKey) keys[currentPrivateKeyRef[0]] );
+            } catch (InvalidArgumentsException e) {
+                ISOException.throwIt(ISO7816.SW_UNKNOWN);
+            } catch (NotEnoughSpaceException e) {
+                ISOException.throwIt(ISO7816.SW_UNKNOWN);
+            }
             break;
 
         case ALG_GEN_EC:
