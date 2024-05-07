@@ -94,7 +94,7 @@ echo ***** Cert Propagation ****
 echo ***************************
 
  certutil.exe -scinfo
- rem   currently must manually add certificate, because Provider must be smart card
+ rem   currently must manually add certificate when certutil shows it, because Provider must be smart card
 
 
 echo ***************************
