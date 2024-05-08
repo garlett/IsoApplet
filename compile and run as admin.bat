@@ -1,8 +1,12 @@
 @echo off
 
-set reader=-r "Virtual Smart Card Architecture Virtual PCD 0"
-
 set path=%path%;"C:\Program Files\OpenSC Project\OpenSC\tools"
+set reader=-r "Virtual Smart Card Architecture Virtual PCD 0"
+set simulator=jcardsim-3.0.4-SNAPSHOT.jar
+set simulator=jcardsim-3.0.5-SNAPSHOT.jar
+set applet_base=IsoApplet3\src
+set applet_path=%applet_base%\xyz\wendland\javacard\pki\isoapplet
+
 
 C:
 cd\Users\user\Desktop\virtualsmartcard-0.8_win64
@@ -18,7 +22,7 @@ rem	BixVReader.cer?
 rem	BixVReaderInstaller.msi
 rem	jcardsim-3.0.5-SNAPSHOT.jar
 rem	IsoApplet3 -> gitclone
-rem 	in 'IsoApplet.java'  leave as this:   public static final boolean DEF_PRIVATE_KEY_IMPORT_ALLOWED = true;
+rem 	in 'IsoApplet.java'  leave as this:   public static final boolean DEF_PRIVATE_KEY_IMPORT_ALLOWED = DEF_PRIVATE_KEY_EXPORT_ALLOWED = true;
 rem	pnputil OR devcon -> extract https://download.microsoft.com/download/8/6/9/86925F0F-D57A-4BA4-8278-861B6876D78E/wdk/Installers/09844d1815314132979ed88093f49c6f.cab and rename
 
 rem jcardsim_isoapplet.cfg:
@@ -46,13 +50,15 @@ echo ***************************
 echo ******* compilation *******
 echo ***************************
 
- javac -cp jcardsim-3.0.5-SNAPSHOT.jar -Xlint:deprecation IsoApplet3\src\xyz\wendland\javacard\pki\isoapplet\*.java
+ del %applet_path%\*.class
+
+ javac -cp %simulator% -Xlint:deprecation %applet_path%\*.java
 
 echo ***************************
 echo ***** starting applet *****
 echo ***************************
 
- start /min "simulator" java -cp IsoApplet3\src;jcardsim-3.0.5-SNAPSHOT.jar com.licel.jcardsim.remote.BixVReaderCard jcardsim_isoapplet.cfg
+ start /min "simulator" java -cp %applet_base%;%simulator% com.licel.jcardsim.remote.BixVReaderCard jcardsim_isoapplet.cfg
 
 ping 0.0.0.0 >NUL
 tasklist /fi "WINDOWTITLE eq simulator" 2>NUL | find /I "java.exe" >NUL
@@ -93,8 +99,8 @@ echo ***************************
 echo ***** Cert Propagation ****
 echo ***************************
 
- certutil.exe -scinfo
- rem   currently must manually add certificate when certutil shows it, because Provider must be smart card
+rem C:\Windows\SysWOW64\certutil.exe -scinfo
+rem   currently must manually add certificate when certutil shows it, because Provider must be smart card
 
 
 echo ***************************
@@ -102,50 +108,53 @@ echo *** Export Certificate ****
 echo ***************************
 
 
+rem 00 class   CA get data   3F FF p1 p2 get private opcode   00 data length
+ opensc-tool %reader% --send-apdu 00CA3FFF00
+rem response:		69	82	E	Security condition not satisfied.
+rem response:		69	85	E	Conditions of use not satisfied.
+rem response:		6F	00	E	Command aborted – more exact diagnosis not possible (e.g., operating system error).
+rem response:		00	01		? ram_buf out of bounds
+rem response:		00	03		? APDUException.BUFFER_BOUNDS
+rem 	pkcs15-tool %reader% --verify-pin
+
 cmd
 exit
 
 
 
+
+
 :openSC_pkcs11
-pkcs11-tool.exe --read-object --type privkey --id 01 -l --pin 1234
-rem https://github.com/OpenSC/OpenSC/blob/e2b1fb81e0e1339eebaa36fb90635e03f69d4da3/src/tools/pkcs11-tool.c#L4088
-rem https://github.com/OpenSC/OpenSC/pull/1393
+rem pkcs11-tool.exe --read-object --type privkey --id 01 -l --pin 1234
+https://github.com/OpenSC/OpenSC/blob/e2b1fb81e0e1339eebaa36fb90635e03f69d4da3/src/tools/pkcs11-tool.c#L4088
+https://github.com/OpenSC/OpenSC/pull/1393
 
 :openSC_pkcs15-tool_export-cert
-rem https://github.com/OpenSC/OpenSC/issues/1522
-rem https://github.com/OpenSC/OpenSC/blob/master/src/pkcs15init/pkcs15-isoApplet.c#L783
-rem https://github.com/OpenSC/OpenSC/blob/master/src/pkcs15init/pkcs15-cflex.c#L938
-
-rem config opensc.isoapplet to export key when P1P2 == 0x3FFF
-
-
-		
+https://github.com/OpenSC/OpenSC/issues/1522
+https://github.com/OpenSC/OpenSC/blob/master/src/pkcs15init/pkcs15-isoApplet.c#L783
+https://github.com/OpenSC/OpenSC/blob/master/src/pkcs15init/pkcs15-cflex.c#L938
 
 
 
 :softHSM
 
-
-softhsm2-util.exe --init-token --slot 0 --label "My token 1"
-
 openssl pkcs12 -in cert.pfx -nocerts -out cert.key
 openssl pkcs12 -in cert.pfx -clcerts -nokeys -out cert.crt
 
-pkcs11-tool.exe -v --module softhsm2-x64.dll -l --pin 1234 --write-object cerj.key --type privkey --id 2222
-pkcs11-tool.exe -v --module softhsm2-x64.dll -l --pin 1234 --write-object cert.crt --type cert --id 2222
+"C:\Program Files (x86)\OpenSC Project\SoftHSMv2.5\bin\softhsm2-util.exe" --init-token --slot 0 --label "My token 1"
+
+pkcs11-tool.exe -v --module "C:\Program Files (x86)\OpenSC Project\SoftHSMv2.5\lib\softhsm2-x64.dll" -l --pin 1234 --write-object cerj.key --type privkey --id 2222
+pkcs11-tool.exe -v --module "C:\Program Files (x86)\OpenSC Project\SoftHSMv2.5\lib\softhsm2-x64.dll" -l --pin 1234 --write-object cert.crt --type cert --id 2222
 
 
 
-softhsm2-util.exe --show-slots
+"C:\Program Files (x86)\OpenSC Project\SoftHSMv2.5\bin\softhsm2-util.exe" --show-slots
 
-pkcs11-tool --module softhsm2-x64.dll --show-info
+pkcs11-tool --module "C:\Program Files (x86)\OpenSC Project\SoftHSMv2.5\lib\softhsm2-x64.dll" --show-info
 
-pkcs11-tool --module softhsm2-x64.dll --list-objects
+pkcs11-tool --module "C:\Program Files (x86)\OpenSC Project\SoftHSMv2.5\lib\softhsm2-x64.dll" --list-objects
 
-certutil.exe -csplist
-
-
+C:\Windows\SysWOW64\certutil.exe -csplist
 
 
 cmd
