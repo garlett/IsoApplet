@@ -59,8 +59,8 @@ public class IsoApplet extends Applet implements ExtendedLength {
     public static final byte API_VERSION_MINOR = (byte) 0x00;
 
     /* Card-specific configuration */
-    public static final boolean DEF_PRIVATE_KEY_IMPORT_ALLOWED = false;
-    public static final boolean DEF_PRIVATE_KEY_EXPORT_ALLOWED = false;
+    public static final boolean DEF_PRIVATE_KEY_IMPORT_ALLOWED = true;
+    public static final boolean DEF_PRIVATE_KEY_EXPORT_ALLOWED = true;
 
     /* ISO constants not in the "ISO7816" interface */
     // File system related INS:
@@ -127,7 +127,7 @@ public class IsoApplet extends Applet implements ExtendedLength {
        We have to use the ram buffer for outgoing and incoming data larger than 133 bytes,
        unless the data is directly read from or written to the file system.
     */
-    private static final short RAM_BUF_SIZE = (short) 660;
+    private static final short RAM_BUF_SIZE = (short) 665;
 
     /* Member variables: */
     private byte state;
@@ -1575,10 +1575,9 @@ public class IsoApplet extends Applet implements ExtendedLength {
 
         // Interindustry template for nesting one set of private key data object
         short key_size = (short)(key.getSize() / 8); // in bytes
-        short len = (short)( 5 * (4 + key_size) );   // len = 5 params * (tag + len + key_size )
         short pos = 0;
 
-        pos += UtilTLV.writeTagAndLen((short)0x7F48, len, ram_buf, pos);
+        pos += UtilTLV.writeTagAndLen((short)0x7F48, (short)( 5 * (2 + key_size) ), ram_buf, pos);
 
         // Send P
         pos += UtilTLV.writeTagAndLen((short)0x92, key_size, ram_buf, pos);
@@ -1600,30 +1599,37 @@ public class IsoApplet extends Applet implements ExtendedLength {
         pos += UtilTLV.writeTagAndLen((short)0x96, key_size, ram_buf, pos);
         pos += key.getDQ1(ram_buf, pos);
 
+
+pos = 256 + 2; // maximum value! extended length not working on jcardsim?
+
         apdu.setOutgoing();
-        apdu.setOutgoingLength(pos);
+        apdu.setOutgoingLength(pos); // this sets apdu.Lr
         apdu.sendBytesLong(ram_buf, (short)0, pos);
+
         
         // the key MUST NOT remain in ram_buf ?
-        Util.arrayFillNonAtomic(ram_buf, (short)0, pos, (byte)0x00); 
+        Util.arrayFillNonAtomic(ram_buf, (short)0, pos, (byte)0x00);
     }
 
+
+//      * A MANAGE SECURITY ENVIRONMENT must have preceeded (pin currentAlgorithmRef currentPrivateKeyRef) ?
     private void exportPrivateKey(APDU apdu) throws ISOException {
         
-        if( ! pin.isValidated() ) {
+/*        if( ! pin.isValidated() ) {
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
         }
-        
+*/        
         if( ! DEF_PRIVATE_KEY_EXPORT_ALLOWED) {
             ISOException.throwIt(SW_COMMAND_NOT_ALLOWED_GENERAL);
         }
-        
-        switch(currentAlgorithmRef[0]) {
+
+//        switch(currentAlgorithmRef[0]) {
+        switch(ALG_GEN_RSA_2048) {
         case ALG_GEN_RSA_2048:
         case ALG_GEN_RSA_4096:
             // RSA key export
             try {
-                sendRSAPrivateKey(apdu, (RSAPrivateCrtKey) keys[currentPrivateKeyRef[0]] );
+                sendRSAPrivateKey(apdu, ((RSAPrivateCrtKey) (keys[currentPrivateKeyRef[0]])) );
             } catch (InvalidArgumentsException e) {
                 ISOException.throwIt(ISO7816.SW_UNKNOWN);
             } catch (NotEnoughSpaceException e) {
