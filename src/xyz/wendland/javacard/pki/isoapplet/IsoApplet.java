@@ -127,7 +127,7 @@ public class IsoApplet extends Applet implements ExtendedLength {
        We have to use the ram buffer for outgoing and incoming data larger than 133 bytes,
        unless the data is directly read from or written to the file system.
     */
-    private static final short RAM_BUF_SIZE = (short) 665;
+    private static final short RAM_BUF_SIZE = (short) 665; // ok for 5(p,q,pq,dp,dq) rsa 1024 bits params
 
     /* Member variables: */
     private byte state;
@@ -394,8 +394,8 @@ public class IsoApplet extends Applet implements ExtendedLength {
             buf[2] = api_features;
             apdu.setOutgoingAndSend((short) 0, (short) 3);
         } else {
-            if(p1 == (byte) 0x3F && p2 == (byte) 0xFF) {
-                exportPrivateKey(apdu);
+            if(p1 == (byte) 0x3F) {
+                exportPrivateKey(apdu, p2);
             } else {
                 ISOException.throwIt(ISO7816.SW_INCORRECT_P1P2);
             }
@@ -1571,9 +1571,8 @@ public class IsoApplet extends Applet implements ExtendedLength {
         }
     }
 
-    private void sendRSAPrivateKey(APDU apdu, RSAPrivateCrtKey key) throws InvalidArgumentsException, NotEnoughSpaceException {
+    private short rsaprivkey_to_iso7816_at_globalrambuff(RSAPrivateCrtKey key) throws InvalidArgumentsException, NotEnoughSpaceException {
 
-        // Interindustry template for nesting one set of private key data object
         short key_size = (short)(key.getSize() / 8); // in bytes
         short pos = 0;
 
@@ -1599,52 +1598,56 @@ public class IsoApplet extends Applet implements ExtendedLength {
         pos += UtilTLV.writeTagAndLen((short)0x96, key_size, ram_buf, pos);
         pos += key.getDQ1(ram_buf, pos);
 
-
-pos = 256 + 2; // maximum value! extended length not working on jcardsim?
-
-        apdu.setOutgoing();
-        apdu.setOutgoingLength(pos); // this sets apdu.Lr
-        apdu.sendBytesLong(ram_buf, (short)0, pos);
-
-        
-        // the key MUST NOT remain in ram_buf ?
-        Util.arrayFillNonAtomic(ram_buf, (short)0, pos, (byte)0x00);
+	    return pos;
     }
 
 
-//      * A MANAGE SECURITY ENVIRONMENT must have preceeded (pin currentAlgorithmRef currentPrivateKeyRef) ?
-    private void exportPrivateKey(APDU apdu) throws ISOException {
-        
-/*        if( ! pin.isValidated() ) {
+
+
+
+    // to use 'currentPrivateKeyRef' does we need previus 'MANAGE SECURITY ENVIRONMENT' ?
+    private void exportPrivateKey(APDU apdu, byte offset_block) throws ISOException {
+
+	    short len = 0;
+	    short offset_pos;
+       
+        if( ! pin.isValidated() ) {
             ISOException.throwIt(ISO7816.SW_SECURITY_STATUS_NOT_SATISFIED);
         }
-*/        
+        
         if( ! DEF_PRIVATE_KEY_EXPORT_ALLOWED) {
             ISOException.throwIt(SW_COMMAND_NOT_ALLOWED_GENERAL);
         }
 
-//        switch(currentAlgorithmRef[0]) {
-        switch(ALG_GEN_RSA_2048) {
-        case ALG_GEN_RSA_2048:
-        case ALG_GEN_RSA_4096:
-            // RSA key export
-            try {
-                sendRSAPrivateKey(apdu, ((RSAPrivateCrtKey) (keys[currentPrivateKeyRef[0]])) );
-            } catch (InvalidArgumentsException e) {
-                ISOException.throwIt(ISO7816.SW_UNKNOWN);
-            } catch (NotEnoughSpaceException e) {
-                ISOException.throwIt(ISO7816.SW_UNKNOWN);
-            }
-            break;
+	    try {
+	        switch( keys[currentPrivateKeyRef[0]].getType() ) {
+        	case KeyBuilder.TYPE_RSA_CRT_PRIVATE:
+			    len = rsaprivkey_to_iso7816_at_globalrambuff( (RSAPrivateCrtKey) keys[currentPrivateKeyRef[0]] );
+			    break;
+	        case KeyBuilder.TYPE_EC_FP_PRIVATE:
+			    //len = ecprivkey_to_iso7816_at_globalrambuff( (RSAPrivateCrtKey) keys[currentPrivateKeyRef[0]] );
+			break;
+		    default:
+			    ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+        	}
 
-        case ALG_GEN_EC:
-            // EC key export
-            // sendECPrivateKey(apdu, (ECPrivateCrtKey) keys[currentPrivateKeyRef[0]] );
-            break;
-        default:
-            ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
-        }
-    }    
+		    offset_pos = (short) (offset_block * 256); // apdu_size_limit
+		    len -= offset_pos;
+		    if(len > 256) { len = 256; }
+
+            apdu.setOutgoing();
+	        apdu.setOutgoingLength(len);
+	        apdu.sendBytesLong(ram_buf, offset_pos, len);
+
+	        // the key MUST NOT remain in ram_buf ?
+            Util.arrayFillNonAtomic(ram_buf, (short)0, (short)(ram_buf.length-1), (byte)0x00);
+
+	    } catch (InvalidArgumentsException e) {
+            ISOException.throwIt(ISO7816.SW_UNKNOWN);
+	    } catch (NotEnoughSpaceException e) {
+            ISOException.throwIt(ISO7816.SW_UNKNOWN);
+	    }
+    }
     
     /**
      * \brief Get the field length of an EC FP key using the amount of bytes
