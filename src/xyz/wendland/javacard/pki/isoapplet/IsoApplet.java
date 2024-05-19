@@ -19,6 +19,11 @@
 
 package xyz.wendland.javacard.pki.isoapplet;
 
+
+//import opencrypto.jcmathlib.*;
+//import javacard.security.RSAPrivateKey;
+//import javacardx.framework.math.BigNumber;
+
 import javacard.framework.Applet;
 import javacard.framework.ISO7816;
 import javacard.framework.ISOException;
@@ -127,7 +132,7 @@ public class IsoApplet extends Applet implements ExtendedLength {
        We have to use the ram buffer for outgoing and incoming data larger than 133 bytes,
        unless the data is directly read from or written to the file system.
     */
-    private static final short RAM_BUF_SIZE = (short) 665; // ok for 5(p,q,pq,dp,dq) rsa 1024 bits params -> 5+5*(128+4)
+    private static final short RAM_BUF_SIZE = (short) 665*2; // rsa 1024: 5 + 5(p,q,pq,dp,dq)*128    // *2 der: n,e,m + ...
 
     /* Member variables: */
     private byte state;
@@ -1592,7 +1597,7 @@ public class IsoApplet extends Applet implements ExtendedLength {
 
 	pos = ram_buf_insert_tag(pos, (short)0x96, key.getDQ1(ram_buf, pos));         // DQ1 (d mod (q-1))
 
-        UtilTLV.writeTagAndLen((short)0x7F48, pos, ram_buf, (short)0);
+        UtilTLV.writeTagAndLen((short)0x7F48, (short)(pos-5), ram_buf, (short)0);
 
 	return pos;
     }
@@ -1619,7 +1624,7 @@ public class IsoApplet extends Applet implements ExtendedLength {
 
 	//pos = ram_buf_insert_tag(pos, (short)0x98, key.getK(ram_buf, pos));        // h cofactor of G in E, i.e. #E[GF(p)]/q
 
-        UtilTLV.writeTagAndLen((short)0x7F48, pos, ram_buf, (short)0);
+        UtilTLV.writeTagAndLen((short)0x7F48, (short)(pos-5), ram_buf, (short)0);
 	    
 	return pos;
     }
@@ -1642,13 +1647,14 @@ public class IsoApplet extends Applet implements ExtendedLength {
 	    try {
 	        switch( keys[currentPrivateKeyRef[0]].getType() ) {
         	case KeyBuilder.TYPE_RSA_CRT_PRIVATE:
-			len = rsaprivkey_to_iso7816_at_globalrambuff( (RSAPrivateCrtKey) keys[currentPrivateKeyRef[0]] );
+//			len = rsaprivkey_to_iso7816_at_globalrambuff( (RSAPrivateCrtKey) keys[currentPrivateKeyRef[0]] );
+			len = key_to_littleder_at_globalrambuff( (RSAPrivateCrtKey) keys[currentPrivateKeyRef[0]] );
 			break;
 	        case KeyBuilder.TYPE_EC_FP_PRIVATE:
 			len = ecprivkey_to_iso7816_at_globalrambuff( (ECPrivateKey) keys[currentPrivateKeyRef[0]] );
 			break;
 		default:
-			    ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
+			ISOException.throwIt(ISO7816.SW_CONDITIONS_NOT_SATISFIED);
         	}
 
 		offset_pos = (short) (offset_block * 256); // apdu_size_limit
@@ -1667,6 +1673,46 @@ public class IsoApplet extends Applet implements ExtendedLength {
 	    } catch (NotEnoughSpaceException e) {
 		ISOException.throwIt(ISO7816.SW_UNKNOWN);
 	    }
+    }
+
+
+    private short key_to_littleder_at_globalrambuff(RSAPrivateCrtKey key) throws InvalidArgumentsException, NotEnoughSpaceException {
+
+	short pos = 4; //30 82 len2
+
+	Util.arrayFillNonAtomic(ram_buf, (short)0, (short)(RAM_BUF_SIZE-1), (byte)0x44);
+//ResourceManager rm = new ResourceManager( (short) 0 );
+//BigNat x = new BigNat((short)260, (byte)1, rm);
+//BigNat y = new BigNat((short)260, (byte)1, rm);
+//x.fromByteArray(ram_buf, (short)0, (short)128 );
+//y.fromByteArray(ram_buf, (short)0, (short)128 );
+//x.mult(y);
+//x.copyToByteArray(ram_buf, (short)0 );
+//pos = 600;
+
+	pos += UtilTLV.writeTagAndLen((short)0x02, (short)1, ram_buf, (short)pos );
+	ram_buf[pos++] = (byte)0x00;  //version
+
+	pos = ram_buf_insert_tag(pos, (short)0x02, (short)256 ); // der certificate: public modulos n    TODO: P*Q?
+
+//	pos = ram_buf_insert_tag(pos, (short)0x02, key.getP(ram_buf, pos)); // der certificate: public exponent e   // most likely 01 00 01 = 65537
+	pos += UtilTLV.writeTagAndLen((short)0x02, (short)3, ram_buf, (short)pos );  ram_buf[pos++] = (byte)0x01;  ram_buf[pos++] = (byte)0x00;  ram_buf[pos++] = (byte)0x01;
+
+	pos = ram_buf_insert_tag(pos, (short)0x02, (short)256 ); // private exponent d    TODO: ModInverse(e, (p - 1) * (q - 1))
+
+	pos = ram_buf_insert_tag(pos, (short)0x02, key.getP(ram_buf, pos));
+
+	pos = ram_buf_insert_tag(pos, (short)0x02, key.getQ(ram_buf, pos));
+
+	pos = ram_buf_insert_tag(pos, (short)0x02, key.getDP1(ram_buf, pos)); // d mod (p-1)
+
+	pos = ram_buf_insert_tag(pos, (short)0x02, key.getDQ1(ram_buf, pos)); // d mod (q-1)
+
+	pos = ram_buf_insert_tag(pos, (short)0x02, key.getPQ(ram_buf, pos));  // 1/q mod p
+
+        UtilTLV.writeTagAndLen((short)0x30, (short)(pos-4), ram_buf, (short)0);
+
+	return pos;
     }
 
 
