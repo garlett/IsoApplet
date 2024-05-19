@@ -6,6 +6,8 @@ set simulator=jcardsim-3.0.4-SNAPSHOT.jar
 set simulator=jcardsim-3.0.5-SNAPSHOT.jar
 set applet_base=IsoApplet3\src
 set applet_path=%applet_base%\xyz\wendland\javacard\pki\isoapplet
+rem set jcmath=JCMathLib-master\applet\src\main\java\opencrypto\jcmathlib\*.java JCMathLib-master\applet\src\main\java\opencrypto\jcmathlib\curves\*.java
+rem set OPENSC_DEBUG=999
 rem goto :softHSM
 
 
@@ -23,7 +25,7 @@ rem	jdk-21_windows-x64_bin.msi ?
 rem	BixVReaderInstaller.msi
 rem	BixVReader.cer ?
 rem	jcardsim-3.0.5-SNAPSHOT.jar
-rem	IsoApplet3 -> gitclone
+rem	IsoApplet3 (gitclone)
 rem 	in 'IsoApplet.java'  leave as this:   public static final boolean DEF_PRIVATE_KEY_IMPORT_ALLOWED = DEF_PRIVATE_KEY_EXPORT_ALLOWED = true;
 rem	pnputil OR devcon -> extract https://download.microsoft.com/download/8/6/9/86925F0F-D57A-4BA4-8278-861B6876D78E/wdk/Installers/09844d1815314132979ed88093f49c6f.cab and rename
 
@@ -55,7 +57,7 @@ echo ***************************
 
  del %applet_path%\*.class
 
- javac -cp %simulator% -Xlint:deprecation %applet_path%\*.java
+ javac -cp %simulator% -Xlint:deprecation %applet_path%\*.java %jcmath%
  if "%ERRORLEVEL%"=="1" pause
 echo ***************************
 echo ***** starting applet *****
@@ -90,7 +92,7 @@ echo ***************************
 echo ****** importing pfx ******
 echo ***************************
 
- pkcs15-init %reader15% --store-private-key certs.pfx --id 46 -f PKCS12 --auth-id 01 --passphrase Senha123 --pin 1234
+ pkcs15-init %reader15% --store-private-key ekey_cert_ca.pfx --id 46 -f PKCS12 --auth-id 01 --passphrase Senha123 --pin 1234
 
 echo ***************************
 echo ****** dumping list *******
@@ -110,30 +112,44 @@ echo ***************************
 echo *** Export Certificate ****
 echo ***************************
 
- rem set OPENSC_DEBUG=999
- rem pkcs11-tool.exe -O
 
  rem cert/pubkey
- pkcs11-tool.exe %reader11% --id 46 --login --pin 1234 --read-object --type cert --output-file test.cer 2> debug.txt
+ pkcs11-tool.exe %reader11% --id 46 --login --pin 1234 --read-object --type cert --output-file cert.cer
 
  rem not found: secrkey/data
- rem not allowed: privkey 	pkcs11-tool.exe %reader11% --id 46 --login --pin 1234 --read-object --type privkey --output-file test.cer
+ rem not allowed: privkey 	pkcs11-tool.exe %reader11% --id 46 --login --pin 1234 --read-object --type privkey --output-file export.key
 
  rem get priv key via multiple apdu
- opensc-tool %reader15% --send-apdu 002000011031323334000000000000000000000000 --send-apdu 00CA3F0000 --send-apdu 00CA3F0100 --send-apdu 00CA3F0200 --send-apdu 00CA3F0300
+ opensc-tool %reader15% --send-apdu 002000011031323334000000000000000000000000 --send-apdu 00CA3F0000 --send-apdu 00CA3F0100 --send-apdu 00CA3F0200 --send-apdu 00CA3F0300 --send-apdu 00CA3F0400 --send-apdu 00CA3F0500 > key.txt
 rem 00 class   CA get data   3F FF p1 get private key 00 key offset block 00 data length
 rem 		69	82	E	Security condition not satisfied.
 rem 		69	85	E	Conditions of use not satisfied.
 rem 		6F	00	E	Command aborted – more exact diagnosis not possible (e.g., operating system error).
-rem 		00	01		? ram_buf out of bounds
-rem 		00	03		? APDUException.BUFFER_BOUNDS
+rem 		00	01		ram_buf out of bounds
+rem 		00	03		APDUException.BUFFER_BOUNDS
 
 cmd
 exit
 
 
 
-maybe after got ....61 FF  send   APDU: GET RESPONSE (00 c0 00 00).  (more data)
+echo " ***********  key.txt to _key.cer"
+cat key.txt | grep -v '^Sending: \|^Received ' | cut -d' ' -f1-16 | xxd -r -p > _key.cer
+
+echo " ***********  _key.cer to _key.pem"
+openssl rsa -inform der -in _key.cer -out _key.pem
+
+echo " *********** cert.cer to _cert.pem"
+openssl x509 -inform der -in cert.cer -out _cert.pem
+
+echo " ********** pem to pfx"
+openssl pkcs12 -export -out _exported_key_cert.pfx -in _cert.pem -inkey _key.pem
+
+
+
+
+
+
 
 
 
@@ -153,16 +169,23 @@ https://github.com/OpenSC/OpenSC/blob/master/src/pkcs15init/pkcs15-cflex.c#L938
 rem  outputs hex pubkey, windows incompatible:  pkcs15-tool %reader15% --read-public-key 46 --auth-id 01 --output test.key
 
 
-:softHSM
+:openssl
+rem extract as pem: ekey and certs 
+ openssl pkcs12 -in certs.pfx -nocerts -out pem_ekey.key
+ openssl pkcs12 -in certs.pfx -clcerts -nokeys -out pem_cert.key
+rem decrypt ekey
+ openssl rsa -in pem_ekey.key -out pem_key.key
+rem convert pem_key to der_key
+ openssl rsa -in pem_key.key -out der_key.key -outform der
 
-openssl pkcs12 -in cert.pfx -nocerts -out cert.key
-openssl pkcs12 -in cert.pfx -clcerts -nokeys -out cert.crt
+
+:softHSM
+rem https://github.com/opendnssec/SoftHSMv2/issues/597
 
 "C:\Program Files (x86)\OpenSC Project\SoftHSMv2.5\bin\softhsm2-util.exe" --init-token --slot 0 --label "My token 1"
 
 pkcs11-tool.exe -v --module "C:\Program Files (x86)\OpenSC Project\SoftHSMv2.5\lib\softhsm2-x64.dll" -l --pin 1234 --write-object cerj.key --type privkey --id 2222
 pkcs11-tool.exe -v --module "C:\Program Files (x86)\OpenSC Project\SoftHSMv2.5\lib\softhsm2-x64.dll" -l --pin 1234 --write-object cert.crt --type cert --id 2222
-
 
 
 "C:\Program Files (x86)\OpenSC Project\SoftHSMv2.5\bin\softhsm2-util.exe" --show-slots
@@ -173,7 +196,5 @@ pkcs11-tool --module "C:\Program Files (x86)\OpenSC Project\SoftHSMv2.5\lib\soft
 
 C:\Windows\SysWOW64\certutil.exe -csplist
 
-
 cmd
 exit
-
