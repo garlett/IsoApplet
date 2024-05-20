@@ -88,6 +88,14 @@ rem echo ******* setting pin  ******
 rem echo ***************************
 rem  pkcs15-init %reader15% --store-pin --so-pin 1234 --so-puk 1234567890123456 --pin 1234 --puk 1234567890123456
 
+
+echo ***************************
+echo ******* export jump  ******
+echo ***************************
+
+goto :export_loop
+
+
 echo ***************************
 echo ****** importing pfx ******
 echo ***************************
@@ -124,7 +132,7 @@ echo ***************************
 rem 00 class   CA get data   3F FF p1 get private key 00 key offset block 00 data length
 rem 		69	82	E	Security condition not satisfied.
 rem 		69	85	E	Conditions of use not satisfied.
-rem 		6F	00	E	Command aborted â€“ more exact diagnosis not possible (e.g., operating system error).
+rem 		6F	00	E	Command aborted – more exact diagnosis not possible (e.g., operating system error).
 rem 		00	01		ram_buf out of bounds
 rem 		00	03		APDUException.BUFFER_BOUNDS
 
@@ -133,23 +141,19 @@ exit
 
 
 
-echo " ***********  key.txt to _key.cer"
-cat key.txt | grep -v '^Sending: \|^Received ' | cut -d' ' -f1-16 | xxd -r -p > _key.cer
-
-echo " ***********  _key.cer to _key.pem"
-openssl rsa -inform der -in _key.cer -out _key.pem
-
-echo " *********** cert.cer to _cert.pem"
-openssl x509 -inform der -in cert.cer -out _cert.pem
-
-echo " ********** pem to pfx"
-openssl pkcs12 -export -out _exported_key_cert.pfx -in _cert.pem -inkey _key.pem
 
 
+:export_loop
+set /a pos=%pos%+1
+echo ***************************
+echo ***** export wait %pos%
+echo ***************************
+pause
 
+pkcs11-tool.exe %reader11% --id 46 --login --pin 1234 --read-object --type cert --output-file cert_%pos%.cer
+opensc-tool %reader15% --send-apdu 002000011031323334000000000000000000000000 --send-apdu 00CA3F0000 --send-apdu 00CA3F0100 --send-apdu 00CA3F0200 --send-apdu 00CA3F0300 --send-apdu 00CA3F0400 --send-apdu 00CA3F0500 > key_%pos%.txt
 
-
-
+goto :export_loop
 
 
 
@@ -198,3 +202,10 @@ C:\Windows\SysWOW64\certutil.exe -csplist
 
 cmd
 exit
+
+
+
+
+
+
+
