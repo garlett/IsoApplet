@@ -32,6 +32,7 @@ This project uses [ant-javacard](https://github.com/martinpaljak/ant-javacard) t
 After cloning the IsoApplet repository, all you have to do is:
 * Perform `git submodule init && git submodule update` to retrieve the Java Card SDKs, in case you did not `git clone --recursive` to clone this repository.
 * Install Apache `ant`, `openjdk-17-jdk-headless`
+* If needed, configure the correct Java SDK version or set the JAVA_HOME environment variable.
 * Invoke `ant` to produce the cap file.
 If you have build errors on an existing repository, try deleting the ant-javacard.jar file so that the newest version is downloaded.
 
